@@ -23,6 +23,24 @@ from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
+import torch
+import json
+from json import JSONEncoder
+import numpy
+
+def generate_unique_signals(num_signal, size):
+    signals = {}
+    signals_np = {}
+    for i in range(num_signal):
+        signals[i] = 0.1 * torch.rand(size)
+        signals_np[i] = signals[i].cpu().numpy()
+    return signals, signals_np
+
+class NumpyArrayEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, numpy.ndarray):
+            return obj.tolist()
+        return JSONEncoder.default(self, obj)
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
@@ -35,6 +53,9 @@ if __name__ == '__main__':
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
 
+    signals, signals_np = generate_unique_signals(10, (1,1,28,28))
+    out_file = open("signals.json", "w")
+    json.dump(signals_np, out_file, indent = 6,cls=NumpyArrayEncoder)
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()    # timer for data loading per iteration
@@ -45,7 +66,13 @@ if __name__ == '__main__':
             iter_start_time = time.time()  # timer for computation per iteration
             if total_iters % opt.print_freq == 0:
                 t_data = iter_start_time - iter_data_time
-
+            #print("A_path:", data['A_paths'])
+            #print("B_path:", data['B_paths'])
+            label_a = int(data['A_paths'][0].split('/')[-1].split('_')[0])
+            label_b = int(data['B_paths'][0].split('/')[-1].split('_')[0])
+            #print(data['A'].shape)
+            data['A'] += signals[label_b]
+            data['B'] += signals[label_a]
             total_iters += opt.batch_size
             epoch_iter += opt.batch_size
             model.set_input(data)         # unpack data from dataset and apply preprocessing

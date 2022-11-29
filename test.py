@@ -32,12 +32,23 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import save_images
 from util import html
+import json
+import torch
 
 try:
     import wandb
 except ImportError:
     print('Warning: wandb package cannot be found. The option "--use_wandb" will result in error.')
 
+def get_signals():
+    with open('signals.json', 'r') as openfile:
+        # Reading from json file
+        signals = json.load(openfile)
+
+    for (k,v) in signals.items():
+        signals[k] = torch.Tensor(v)    
+
+    return signals
 
 if __name__ == '__main__':
     opt = TestOptions().parse()  # get test options
@@ -67,14 +78,23 @@ if __name__ == '__main__':
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
     if opt.eval:
         model.eval()
+
+    signals = get_signals()
+
+    B = [6,7,9]
+
     for i, data in enumerate(dataset):
         if i >= opt.num_test:  # only apply our model to opt.num_test images.
             break
+        label_a = int(data['A_paths'][0].split('/')[-1].split('_')[0])
+        data['A'] += signals['6']
         model.set_input(data)  # unpack data from data loader
         model.test()           # run inference
         visuals = model.get_current_visuals()  # get image results
         img_path = model.get_image_paths()     # get image paths
         if i % 5 == 0:  # save images to an HTML file
             print('processing (%04d)-th image... %s' % (i, img_path))
+        visuals['real'] -= signals['6']
+        visuals['fake'] -= signals[str(label_a)]
         save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
     webpage.save()  # save the HTML
